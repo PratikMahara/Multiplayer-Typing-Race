@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, Zap, Target, Users, Trophy } from 'lucide-react';
+import { RotateCcw, Settings, ArrowLeft } from 'lucide-react';
 import { useGame } from '../../context/GameContext';
 import { useAuth } from '../../context/AuthContext';
 import { TypingStats } from '../../types';
@@ -80,32 +80,88 @@ export const TypingGame: React.FC<TypingGameProps> = ({ onGameEnd }) => {
     setCurrentWordIndex(Math.max(0, wordsCompleted));
   };
 
-  const renderText = () => {
-    if (!currentRoom?.text) return null;
+  const resetGame = () => {
+    setTypedText('');
+    setGameStarted(false);
+    setGameEnded(false);
+    setTimeLeft(60);
+    setCurrentWordIndex(0);
+    setStats({
+      wpm: 0,
+      accuracy: 100,
+      currentWordIndex: 0,
+      typedText: '',
+      errors: 0,
+      startTime: 0,
+    });
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  };
 
-    const text = currentRoom.text;
-    const typed = typedText;
-    
+  const renderWords = () => {
+    if (!words.length) return null;
+
+    const typedWords = typedText.split(' ');
+    const currentTypedWord = typedWords[typedWords.length - 1] || '';
+
     return (
-      <div className="text-2xl leading-relaxed font-mono">
-        {text.split('').map((char, index) => {
-          let className = 'transition-colors duration-75';
-          
-          if (index < typed.length) {
-            if (typed[index] === char) {
-              className += ' text-green-400 bg-green-400/10';
-            } else {
-              className += ' text-red-400 bg-red-400/20';
-            }
-          } else if (index === typed.length) {
-            className += ' text-white bg-blue-500 animate-pulse'; // cursor
-          } else {
-            className += ' text-slate-500';
-          }
+      <div className="text-2xl leading-relaxed font-mono select-none">
+        {words.map((word, wordIndex) => {
+          const isCurrentWord = wordIndex === currentWordIndex;
+          const isTypedWord = wordIndex < typedWords.length - 1;
+          const typedWord = typedWords[wordIndex] || '';
 
           return (
-            <span key={index} className={className}>
-              {char === ' ' ? '\u00A0' : char}
+            <span key={wordIndex} className="relative">
+              {word.split('').map((char, charIndex) => {
+                let className = 'transition-colors duration-100';
+                
+                if (isCurrentWord) {
+                  if (charIndex < currentTypedWord.length) {
+                    if (currentTypedWord[charIndex] === char) {
+                      className += ' text-white bg-transparent';
+                    } else {
+                      className += ' text-red-400 bg-red-400/20';
+                    }
+                  } else if (charIndex === currentTypedWord.length) {
+                    className += ' text-slate-400 bg-yellow-400 animate-pulse'; // cursor
+                  } else {
+                    className += ' text-slate-500';
+                  }
+                } else if (isTypedWord) {
+                  if (charIndex < typedWord.length) {
+                    if (typedWord[charIndex] === char) {
+                      className += ' text-slate-400';
+                    } else {
+                      className += ' text-red-400 bg-red-400/10';
+                    }
+                  } else {
+                    className += ' text-red-400 bg-red-400/10'; // missing characters
+                  }
+                } else {
+                  className += ' text-slate-500';
+                }
+
+                return (
+                  <span key={charIndex} className={className}>
+                    {char}
+                  </span>
+                );
+              })}
+              
+              {/* Extra characters typed */}
+              {isCurrentWord && currentTypedWord.length > word.length && (
+                <span className="text-red-400 bg-red-400/20">
+                  {currentTypedWord.substring(word.length)}
+                </span>
+              )}
+              
+              {wordIndex < words.length - 1 && (
+                <span className={`${
+                  wordIndex < typedWords.length - 1 ? 'text-slate-400' : 'text-slate-500'
+                }`}> </span>
+              )}
             </span>
           );
         })}
@@ -150,94 +206,56 @@ export const TypingGame: React.FC<TypingGameProps> = ({ onGameEnd }) => {
 
   if (!currentRoom) return null;
 
-  const progress = (typedText.length / currentRoom.text.length) * 100;
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
-      {/* Header */}
-      <header className="border-b border-slate-700/50 bg-slate-800/50 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-r from-red-500 to-orange-500 rounded-lg flex items-center justify-center">
-                  <Clock className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-white">{timeLeft}s</p>
-                  <p className="text-slate-400 text-sm">Time Left</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
-                  <Zap className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-white">{stats.wpm}</p>
-                  <p className="text-slate-400 text-sm">WPM</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-teal-500 rounded-lg flex items-center justify-center">
-                  <Target className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-white">{stats.accuracy}%</p>
-                  <p className="text-slate-400 text-sm">Accuracy</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4">
-              {currentRoom.players.map((player) => (
-                <div key={player.id} className="flex items-center gap-2 bg-slate-700/50 px-3 py-2 rounded-lg">
-                  <img
-                    src={player.avatar}
-                    alt={player.username}
-                    className="w-8 h-8 rounded-full"
-                  />
-                  <div>
-                    <p className="text-white text-sm font-medium">{player.username}</p>
-                    <p className="text-slate-400 text-xs">{player.wpm} WPM</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Progress Bar */}
-          <div className="mt-4">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-slate-400 text-sm">Progress</span>
-              <span className="text-white text-sm">{Math.round(progress)}%</span>
-            </div>
-            <div className="w-full bg-slate-700 rounded-full h-2">
-              <motion.div
-                className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full"
-                initial={{ width: 0 }}
-                animate={{ width: `${progress}%` }}
-                transition={{ duration: 0.3 }}
-              />
-            </div>
-          </div>
+    <div className="min-h-screen bg-slate-900 text-slate-300">
+      {/* Top Navigation */}
+      <div className="flex items-center justify-between p-6 max-w-6xl mx-auto">
+        <button
+          onClick={onGameEnd}
+          className="flex items-center gap-2 text-slate-400 hover:text-slate-300 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span className="text-sm">back</span>
+        </button>
+        
+        <div className="flex items-center gap-6">
+          <button
+            onClick={resetGame}
+            className="text-slate-400 hover:text-slate-300 transition-colors"
+          >
+            <RotateCcw className="w-5 h-5" />
+          </button>
+          <button className="text-slate-400 hover:text-slate-300 transition-colors">
+            <Settings className="w-5 h-5" />
+          </button>
         </div>
-      </header>
+      </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex items-center justify-center p-8">
-        <div className="max-w-4xl mx-auto w-full">
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] px-6">
+        <div className="w-full max-w-4xl mx-auto">
           {!gameEnded ? (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-8"
-            >
-              {/* Typing Text */}
-              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-8">
-                <div className="mb-6">
-                  {renderText()}
+            <>
+              {/* Stats Bar */}
+              <div className="flex items-center justify-center gap-8 mb-12 text-yellow-400">
+                <div className="text-center">
+                  <div className="text-3xl font-bold">{timeLeft}</div>
+                  <div className="text-sm text-slate-500">time</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-3xl font-bold">{stats.wpm}</div>
+                  <div className="text-sm text-slate-500">wpm</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-3xl font-bold">{stats.accuracy}%</div>
+                  <div className="text-sm text-slate-500">acc</div>
+                </div>
+              </div>
+
+              {/* Typing Area */}
+              <div className="relative mb-8">
+                <div className="p-8 rounded-lg bg-transparent">
+                  {renderWords()}
                 </div>
 
                 {/* Hidden Input */}
@@ -246,90 +264,127 @@ export const TypingGame: React.FC<TypingGameProps> = ({ onGameEnd }) => {
                   type="text"
                   value={typedText}
                   onChange={handleInputChange}
-                  className="opacity-0 absolute -top-full -left-full"
+                  className="absolute opacity-0 pointer-events-none"
                   autoFocus
                   disabled={gameEnded}
                 />
+              </div>
 
-                <div className="text-center">
-                  <p className="text-slate-400">
-                    {gameStarted ? 'Keep typing!' : 'Start typing to begin...'}
-                  </p>
+              {/* Players List */}
+              <div className="flex justify-center">
+                <div className="bg-slate-800/50 rounded-lg p-4 min-w-[300px]">
+                  <div className="text-center text-slate-400 text-sm mb-3">live wpm</div>
+                  <div className="space-y-2">
+                    {currentRoom.players
+                      .sort((a, b) => b.wpm - a.wpm)
+                      .map((player, index) => (
+                        <div
+                          key={player.id}
+                          className={`flex items-center justify-between px-3 py-2 rounded ${
+                            player.id === user?.id 
+                              ? 'bg-yellow-400/10 text-yellow-400' 
+                              : 'text-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-mono">
+                              #{index + 1}
+                            </span>
+                            <span className="text-sm">{player.username}</span>
+                          </div>
+                          <div className="flex items-center gap-4 text-sm">
+                            <span>{player.wpm} wpm</span>
+                            <span className="text-slate-500">{player.accuracy}%</span>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            /* Results Screen */
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-center space-y-8"
+            >
+              <div className="space-y-4">
+                <h2 className="text-4xl font-bold text-yellow-400">race complete</h2>
+                <div className="text-slate-400">final results</div>
+              </div>
+
+              <div className="bg-slate-800/50 rounded-lg p-8 max-w-2xl mx-auto">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+                  <div>
+                    <div className="text-3xl font-bold text-yellow-400">{stats.wpm}</div>
+                    <div className="text-sm text-slate-500">wpm</div>
+                  </div>
+                  <div>
+                    <div className="text-3xl font-bold text-yellow-400">{stats.accuracy}%</div>
+                    <div className="text-sm text-slate-500">accuracy</div>
+                  </div>
+                  <div>
+                    <div className="text-3xl font-bold text-yellow-400">{typedText.length}</div>
+                    <div className="text-sm text-slate-500">characters</div>
+                  </div>
+                  <div>
+                    <div className="text-3xl font-bold text-yellow-400">{stats.errors}</div>
+                    <div className="text-sm text-slate-500">errors</div>
+                  </div>
                 </div>
               </div>
 
-              {/* Live Leaderboard */}
-              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-6">
-                <h3 className="text-white font-bold text-lg mb-4 flex items-center gap-2">
-                  <Users className="w-5 h-5" />
-                  Live Standings
-                </h3>
+              {/* Final Leaderboard */}
+              <div className="bg-slate-800/50 rounded-lg p-6 max-w-md mx-auto">
+                <div className="text-center text-slate-400 text-sm mb-4">final standings</div>
                 <div className="space-y-3">
                   {currentRoom.players
                     .sort((a, b) => b.wpm - a.wpm)
                     .map((player, index) => (
-                      <motion.div
+                      <div
                         key={player.id}
-                        layout
-                        className={`flex items-center justify-between p-3 rounded-lg ${
-                          player.id === user?.id ? 'bg-blue-500/20 border border-blue-500/30' : 'bg-slate-700/30'
+                        className={`flex items-center justify-between px-4 py-3 rounded ${
+                          player.id === user?.id 
+                            ? 'bg-yellow-400/10 text-yellow-400' 
+                            : 'text-slate-300'
                         }`}
                       >
                         <div className="flex items-center gap-3">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                            index === 0 ? 'bg-yellow-500 text-white' : 
-                            index === 1 ? 'bg-gray-400 text-white' :
-                            index === 2 ? 'bg-orange-500 text-white' : 'bg-slate-600 text-slate-300'
+                            index === 0 ? 'bg-yellow-500 text-black' : 
+                            index === 1 ? 'bg-slate-400 text-black' :
+                            index === 2 ? 'bg-orange-500 text-black' : 'bg-slate-600 text-slate-300'
                           }`}>
                             {index + 1}
                           </div>
-                          <img
-                            src={player.avatar}
-                            alt={player.username}
-                            className="w-8 h-8 rounded-full"
-                          />
-                          <span className="text-white font-medium">{player.username}</span>
+                          <span>{player.username}</span>
                         </div>
-                        <div className="flex items-center gap-4 text-sm">
-                          <span className="text-blue-400">{player.wpm} WPM</span>
-                          <span className="text-green-400">{player.accuracy}%</span>
+                        <div className="text-right">
+                          <div className="font-bold">{player.wpm} wpm</div>
+                          <div className="text-xs text-slate-500">{player.accuracy}% acc</div>
                         </div>
-                      </motion.div>
+                      </div>
                     ))}
                 </div>
               </div>
-            </motion.div>
-          ) : (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="text-center space-y-6"
-            >
-              <div className="w-20 h-20 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full flex items-center justify-center mx-auto">
-                <Trophy className="w-10 h-10 text-white" />
+
+              <div className="text-slate-500 text-sm">
+                returning to lobby in a few seconds...
               </div>
-              <h2 className="text-4xl font-bold text-white">Game Complete!</h2>
-              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-8 max-w-2xl mx-auto">
-                <div className="grid grid-cols-3 gap-6 text-center">
-                  <div>
-                    <p className="text-3xl font-bold text-blue-400">{stats.wpm}</p>
-                    <p className="text-slate-400">WPM</p>
-                  </div>
-                  <div>
-                    <p className="text-3xl font-bold text-green-400">{stats.accuracy}%</p>
-                    <p className="text-slate-400">Accuracy</p>
-                  </div>
-                  <div>
-                    <p className="text-3xl font-bold text-purple-400">{stats.errors}</p>
-                    <p className="text-slate-400">Errors</p>
-                  </div>
-                </div>
-              </div>
-              <p className="text-slate-400">Returning to lobby in a few seconds...</p>
             </motion.div>
           )}
         </div>
       </div>
+
+      {/* Bottom hint */}
+      {!gameStarted && !gameEnded && (
+        <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2">
+          <div className="text-slate-500 text-sm">
+            click here or start typing to focus
+          </div>
+        </div>
+      )}
     </div>
   );
 };

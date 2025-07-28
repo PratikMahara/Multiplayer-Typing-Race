@@ -1,28 +1,74 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { LogIn, Mail, Lock, AlertCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+// Add google icon (using lucide-react or replace with your own)
+import { FcGoogle } from 'react-icons/fc'; // You may need to install react-icons
+import {auth, provider} from "../../utils/firebase"; 
+import { signInWithPopup } from 'firebase/auth';
+import axios from 'axios';
+import { User } from '../../types';
 
+import { nav } from 'framer-motion/client';
+// Adjust the import path as necessary
 interface LoginFormProps {
   onSwitchToRegister: () => void;
 }
 
 export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister }) => {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const { login, loading } = useAuth();
-
+  const { login, loading, loginWithGoogle } = useAuth(); // Make sure loginWithGoogle exists!
+  const { setUser } = useAuth();
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
     try {
       await login(email, password);
     } catch (err) {
       setError('Invalid credentials');
     }
   };
+
+  // Google Login Handler
+  const handleGoogleLogin = async () => {
+  setError('');
+
+  try {
+    const response = await signInWithPopup(auth, provider);
+    const user = response.user;
+
+    const userData = {
+      name: user.displayName,
+      email: user.email,
+      phoneNumber: user.phoneNumber,
+    };
+    console.log(userData)
+    const rep = await axios.post('http://localhost:8001/api/google/login', userData);
+
+    if (!rep || rep.status !== 200) {
+      console.log("Error logging in with Google");
+      return;
+    }
+    console.log("Google login successful", rep.data);
+       const newUser: User = {
+      id: user.uid,
+      username: user.displayName || user.email?.split('@')[0] || 'Guest',
+      email: user.email || '',
+      totalGames: 0,
+      bestWPM: 0,
+      averageAccuracy: 0,
+      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.email}`
+    };
+        setUser(newUser);
+  } catch (error) {
+    console.error("Google Login Error:", error);
+    setError("Login failed. Please try again.");
+  }
+};
 
   return (
     <motion.div
@@ -44,6 +90,19 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister }) => {
           <h2 className="text-3xl font-bold text-white mb-2">Welcome Back</h2>
           <p className="text-slate-400">Sign in to start typing battles</p>
         </div>
+
+        {/* LOGIN WITH GOOGLE BUTTON */}
+        <motion.button
+          type="button"
+          onClick={handleGoogleLogin}
+          disabled={loading}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          className="w-full flex items-center justify-center gap-2 bg-white text-black font-medium py-3 px-4 rounded-lg border border-slate-200 mb-6 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-900 shadow"
+        >
+          <FcGoogle className="w-5 h-5" />
+          Continue with Google
+        </motion.button>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
